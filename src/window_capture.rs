@@ -125,19 +125,18 @@ impl WindowsCaptureHandler for Handler {
         };
 
         // バッファは画像幅を32の倍数に切り上げて送ってくるらしいので、バッファの幅を計算する。
-        let width32 = ((buffer.width() + 31) / 32 * 32) as usize;
-
+        let ceil_nth = |x, n| (x + n - 1) / n * n;
+        let width32 = ceil_nth(buffer.width() as usize, 64);
         let pixels = buffer.pixels();
 
-        // 画像のうち「32の倍数に満たなかったあまり部分」には適当なごみデータが入っているようなの
-        // で、ごみデータ部分を削除する。
-        let mut bytes = Vec::with_capacity(
-            buffer.width() as usize * buffer.height() as usize * mem::size_of::<RGBA>(),
-        );
-
+        // 画像のうち「32の倍数に満たなかったあまり部分」には適当なごみデータが入っているようなので、
+        // pixelsをそのまま使うことはできない。ごみデータ部分を削ってコピーしたデータを用意する。
+        let capacity = buffer.width() as usize * buffer.height() as usize * mem::size_of::<RGBA>();
+        let mut bytes = Vec::with_capacity(capacity);
         for i in 0..buffer.height() as usize {
             let start = i * width32;
-            let row_pixels = &pixels[start..(start + buffer.width() as usize)];
+            let end = start + buffer.width() as usize;
+            let row_pixels = &pixels[start..end];
             let row_bytes = unsafe {
                 slice::from_raw_parts(
                     row_pixels as *const _ as *const u8,
